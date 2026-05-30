@@ -348,6 +348,9 @@ export function paragraphToRuns(
         (attrs.height as number) || 100,
         _options.pageContentHeight
       );
+      // Carry the image's tracked-change marks so an inserted/deleted picture
+      // paints in the revision color and resolves with the rest of the change.
+      const changeFmt = extractRunFormatting(child.marks, theme);
       const run: ImageRun = {
         kind: 'image',
         src: attrs.src as string,
@@ -368,6 +371,11 @@ export function paragraphToRuns(
         cropBottom: attrs.cropBottom as number | undefined,
         cropLeft: attrs.cropLeft as number | undefined,
         opacity: attrs.opacity as number | undefined,
+        isInsertion: changeFmt.isInsertion,
+        isDeletion: changeFmt.isDeletion,
+        changeAuthor: changeFmt.changeAuthor,
+        changeDate: changeFmt.changeDate,
+        changeRevisionId: changeFmt.changeRevisionId,
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
       };

@@ -302,14 +302,20 @@ function serializeTrackedChange(
   const contentXml = change.content
     .map((item) => {
       if (item.type === 'run') {
-        if (tag === 'del' || tag === 'moveFrom') {
-          return serializeRun(item)
+        const xml = serializeRun(item);
+        // A deleted drawing run keeps its content verbatim: a picture has no
+        // `<w:t>`, and a shape's textbox text (`<w:txbxContent><w:t>`) must NOT
+        // be rewritten to `<w:delText>` — that markup belongs only to a run's
+        // own deleted text, not to a nested textbox document.
+        const isDrawingRun = item.content.some((c) => c.type === 'drawing');
+        if ((tag === 'del' || tag === 'moveFrom') && !isDrawingRun) {
+          return xml
             .replace(/<w:t\b/g, '<w:delText')
             .replace(/<\/w:t>/g, '</w:delText>')
             .replace(/<w:instrText\b/g, '<w:delInstrText')
             .replace(/<\/w:instrText>/g, '</w:delInstrText>');
         }
-        return serializeRun(item);
+        return xml;
       }
       if (item.type === 'hyperlink') return serializeHyperlink(item);
       return '';

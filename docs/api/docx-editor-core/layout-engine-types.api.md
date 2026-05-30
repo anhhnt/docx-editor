@@ -201,6 +201,11 @@ export type ImageRun = {
     cropBottom?: number;
     cropLeft?: number;
     opacity?: number;
+    isInsertion?: boolean;
+    isDeletion?: boolean;
+    changeAuthor?: string;
+    changeDate?: string;
+    changeRevisionId?: number;
     pmStart?: number;
     pmEnd?: number;
 };

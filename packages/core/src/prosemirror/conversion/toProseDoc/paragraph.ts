@@ -191,7 +191,12 @@ function convertTrackedChange(
   });
 
   return nodes.map((node) => {
-    if (node.isText) {
+    // Mark text AND inline atoms (image, shape) so a picture loaded from
+    // `<w:ins>`/`<w:del>` carries the tracked-change mark, not just text.
+    // Text is the short-circuit: a leaf text node's own `markSet` is empty
+    // (`allowsMarkType` is false) even though the paragraph permits the mark —
+    // so checking `allowsMarkType` alone would silently drop tracked TEXT.
+    if (node.isText || node.type.allowsMarkType(mark.type)) {
       return node.mark(mark.addToSet(node.marks));
     }
     return node;

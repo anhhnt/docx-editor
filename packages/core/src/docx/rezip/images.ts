@@ -46,14 +46,29 @@ export function getContentTypeForExtension(extension: string, mimeType: string):
 function collectNewImages(blocks: BlockContent[]): Image[] {
   const images: Image[] = [];
 
+  const collectFromRun = (run: { content: { type: string; image?: Image }[] }): void => {
+    for (const c of run.content) {
+      if (c.type === 'drawing' && c.image?.src?.startsWith('data:')) {
+        images.push(c.image);
+      }
+    }
+  };
+
   for (const block of blocks) {
     if (block.type === 'paragraph') {
       for (const item of block.content) {
         if (item.type === 'run') {
-          for (const c of item.content) {
-            if (c.type === 'drawing' && c.image.src?.startsWith('data:')) {
-              images.push(c.image);
-            }
+          collectFromRun(item);
+        } else if (
+          // A picture inserted/deleted under track changes lives inside an
+          // ins/del/move wrapper — descend so its media part still gets written.
+          item.type === 'insertion' ||
+          item.type === 'deletion' ||
+          item.type === 'moveFrom' ||
+          item.type === 'moveTo'
+        ) {
+          for (const sub of item.content) {
+            if (sub.type === 'run') collectFromRun(sub);
           }
         }
       }

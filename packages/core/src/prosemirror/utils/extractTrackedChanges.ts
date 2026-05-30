@@ -336,13 +336,21 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
       }
     }
 
-    if (!node.isText) return;
+    // Text AND inline atoms (image, shape) can carry tracked-change marks, so
+    // an inserted picture shows up in the sidebar like inserted text. Atoms
+    // have no `.text`, so label them by node type (alt text when present).
+    if (!node.isInline) return;
+    const inlineText = node.isText
+      ? node.text || ''
+      : node.type.name === 'image'
+        ? (node.attrs.alt as string) || 'image'
+        : node.type.name;
     let tcMark: Mark | null = null;
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
         raw.push({
           type: mark.type === insertionType ? 'insertion' : 'deletion',
-          text: node.text || '',
+          text: inlineText,
           author: (mark.attrs.author as string) || '',
           date: mark.attrs.date as string | undefined,
           from: pos,

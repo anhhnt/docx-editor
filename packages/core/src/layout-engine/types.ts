@@ -187,6 +187,16 @@ export type ImageRun = {
   cropLeft?: number;
   /** a:alphaModFix → CSS opacity in [0, 1]. */
   opacity?: number;
+  /** Whether this picture is itself a tracked insertion (`<w:ins>`). */
+  isInsertion?: boolean;
+  /** Whether this picture is itself a tracked deletion (`<w:del>`). */
+  isDeletion?: boolean;
+  /** Author of the tracked change wrapping the picture. */
+  changeAuthor?: string;
+  /** Date of the tracked change wrapping the picture. */
+  changeDate?: string;
+  /** Revision id of the tracked change (for sidebar matching). */
+  changeRevisionId?: number;
   pmStart?: number;
   pmEnd?: number;
 };

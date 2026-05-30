@@ -176,10 +176,20 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
                 'insertion',
                 pluginState.author
               ) ?? makeMarkAttrs(pluginState);
-            // Only mark text nodes that don't already have tracked change marks.
-            // Marking the entire range would overwrite existing marks from other authors.
+            // Mark text AND inline atoms (image, shape) that don't already
+            // carry a tracked-change mark, so a pasted/dropped picture becomes
+            // a tracked insertion just like typed text. Marking the whole range
+            // would overwrite other authors' marks, so we go node by node and
+            // skip any that the schema disallows marks on.
             newState.doc.nodesBetween(newFrom, newTo, (node, pos) => {
-              if (!node.isText) return;
+              // Text is the short-circuit (a leaf text node's own markSet is
+              // empty, so `allowsMarkType` is false even though the paragraph
+              // permits the mark); inline atoms (image, shape) go through the
+              // `allowsMarkType` arm. Dropping the text short-circuit silently
+              // stops tracking pasted text.
+              if (!node.isText && !(node.isInline && node.type.allowsMarkType(insertionType))) {
+                return;
+              }
               const hasTrackedMark = node.marks.some(
                 (m) => m.type === insertionType || (deletionType && m.type === deletionType)
               );

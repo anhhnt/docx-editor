@@ -183,6 +183,10 @@ export const ImageExtension = createNodeExtension({
   nodeSpec: {
     inline: true,
     group: 'inline',
+    // Allow all marks so an inserted/deleted image can carry the
+    // insertion/deletion tracked-change mark (a leaf inline node disallows
+    // marks by default). Lets a picture be a genuine tracked change.
+    marks: '_',
     draggable: true,
     attrs: {
       src: {},

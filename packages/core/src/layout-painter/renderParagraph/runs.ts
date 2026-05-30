@@ -546,14 +546,41 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
 export function renderImageRun(run: ImageRun, doc: Document): HTMLElement {
   // Floating images should be handled at paragraph level, not here
   // If they reach here (e.g., inside table cells), render as block
+  let el: HTMLElement;
   if (isFloatingImageRun(run)) {
-    return renderBlockImage(run, doc);
+    el = renderBlockImage(run, doc);
   } else if (run.displayMode === 'block' || run.wrapType === 'topAndBottom') {
-    return renderBlockImage(run, doc);
+    el = renderBlockImage(run, doc);
   } else {
     // Default: inline
-    return renderInlineImageRun(run, doc);
+    el = renderInlineImageRun(run, doc);
   }
+  applyImageRevisionStyle(el, run);
+  return el;
+}
+
+/**
+ * A picture that is itself a tracked change gets a colored outline (green for
+ * an insertion, red + faded for a deletion), mirroring the text-run treatment.
+ * `outline` is used over `border` so it does not change the image's box size
+ * and perturb the measured line height.
+ */
+function applyImageRevisionStyle(el: HTMLElement, run: ImageRun): void {
+  if (run.isInsertion) {
+    el.style.outline = '2px solid #2e7d32';
+    el.style.outlineOffset = '1px';
+    el.classList.add('docx-insertion');
+  } else if (run.isDeletion) {
+    el.style.outline = '2px solid #c62828';
+    el.style.outlineOffset = '1px';
+    el.style.opacity = '0.6';
+    el.classList.add('docx-deletion');
+  } else {
+    return;
+  }
+  if (run.changeAuthor) el.dataset.changeAuthor = run.changeAuthor;
+  if (run.changeDate) el.dataset.changeDate = run.changeDate;
+  if (run.changeRevisionId != null) el.dataset.revisionId = String(run.changeRevisionId);
 }
 
 /**

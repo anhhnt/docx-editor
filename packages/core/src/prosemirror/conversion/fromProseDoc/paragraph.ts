@@ -308,16 +308,26 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
       }
 
       const changeMark = (insertionMark || deletionMark)!;
-      // Filter out the tracked change mark for text formatting extraction
-      const otherMarks = node.marks.filter(
-        (m) => m.type.name !== 'insertion' && m.type.name !== 'deletion'
-      );
-      const formatting = marksToTextFormatting(otherMarks);
-      const run: Run = {
-        type: 'run',
-        content: node.isText && node.text ? [{ type: 'text', text: node.text }] : [],
-        ...(Object.keys(formatting).length > 0 ? { formatting } : {}),
-      };
+      // Build the run for whatever this node is — text, image, or shape — so a
+      // tracked picture/shape round-trips inside the `<w:ins>`/`<w:del>` wrapper
+      // instead of collapsing to an empty run (the prior text-only path).
+      let run: Run;
+      if (node.type.name === 'image') {
+        run = createImageRun(node);
+      } else if (node.type.name === 'shape') {
+        run = createShapeRun(node);
+      } else {
+        // Filter out the tracked change mark for text formatting extraction
+        const otherMarks = node.marks.filter(
+          (m) => m.type.name !== 'insertion' && m.type.name !== 'deletion'
+        );
+        const formatting = marksToTextFormatting(otherMarks);
+        run = {
+          type: 'run',
+          content: node.isText && node.text ? [{ type: 'text', text: node.text }] : [],
+          ...(Object.keys(formatting).length > 0 ? { formatting } : {}),
+        };
+      }
 
       const info: TrackedChangeInfo = {
         id: changeMark.attrs.revisionId as number,

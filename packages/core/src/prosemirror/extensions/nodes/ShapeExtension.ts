@@ -118,6 +118,9 @@ export const ShapeExtension = createNodeExtension({
   nodeSpec: {
     inline: true,
     group: 'inline',
+    // Allow marks so an inserted/deleted shape can carry the tracked-change
+    // mark (see ImageExtension — leaf inline nodes disallow marks by default).
+    marks: '_',
     draggable: true,
     atom: true,
     attrs: {

@@ -75,7 +75,7 @@ function resolveChange(from: number, to: number, mode: 'accept' | 'reject'): Com
       const deleteRanges: Array<{ from: number; to: number }> = [];
 
       state.doc.nodesBetween(from, to, (node, pos) => {
-        if (!node.isText) return;
+        if (!node.isInline) return;
         const nodeEnd = pos + node.nodeSize;
         const rangeFrom = Math.max(from, pos);
         const rangeTo = Math.min(to, nodeEnd);
@@ -178,8 +178,8 @@ function collectAllRevisionIds(state: EditorState): number[] {
       const tblPrChange = node.attrs.tblPrChange as Array<{ info: { id: number } }> | null;
       if (Array.isArray(tblPrChange)) for (const e of tblPrChange) add(e.info.id);
     }
-    // Inline insertion/deletion marks.
-    if (node.isText) {
+    // Inline insertion/deletion marks (text and inline atoms like images).
+    if (node.isInline) {
       for (const mark of node.marks) {
         if (
           (insertionType && mark.type === insertionType) ||
@@ -273,7 +273,7 @@ export function findNextChange(state: EditorState, startPos: number): ChangeRang
 
   state.doc.descendants((node, pos) => {
     if (result) return false;
-    if (!node.isText) return;
+    if (!node.isInline) return;
     if (pos + node.nodeSize <= startPos) return;
 
     for (const mark of node.marks) {
@@ -401,7 +401,9 @@ function findInlineMarkSites(
   const insertionType = state.schema.marks.insertion;
   const deletionType = state.schema.marks.deletion;
   state.doc.descendants((node, pos) => {
-    if (!node.isText) return;
+    // Text AND inline atoms (image, shape) can carry tracked-change marks, so
+    // rejecting an inserted picture removes it just like inserted text.
+    if (!node.isInline) return;
     for (const mark of node.marks) {
       if (
         (insertionType && mark.type === insertionType) ||
@@ -863,7 +865,7 @@ export function findPreviousChange(state: EditorState, startPos: number): Change
   let result: ChangeRange | null = null;
 
   state.doc.descendants((node, pos) => {
-    if (!node.isText) return;
+    if (!node.isInline) return;
     if (pos >= startPos) return false;
 
     for (const mark of node.marks) {

@@ -33,7 +33,10 @@ export function markRangeAsDeleted(
   const ranges: { from: number; to: number; isOwnInsert: boolean }[] = [];
 
   doc.nodesBetween(from, to, (node, pos) => {
-    if (!node.isText) return;
+    // Text AND inline atoms (image, shape) that accept the mark, so deleting a
+    // picture in suggesting mode strikes it through (or retracts an own-insert)
+    // just like deleting text.
+    if (!node.isText && !(node.isInline && node.type.allowsMarkType(deletionType))) return;
     const start = Math.max(pos, from);
     const end = Math.min(pos + node.nodeSize, to);
     if (start >= end) return;
@@ -100,8 +103,15 @@ export function handleSuggestionDelete(
   const $deletePos = state.doc.resolve(deletePos);
   const nodeAfter = $deletePos.nodeAfter;
 
-  // At block boundary — let default behavior handle (e.g. join paragraphs)
-  if (!nodeAfter?.isText) return false;
+  // At a block boundary — let default behavior handle (e.g. join paragraphs).
+  // Text and inline atoms (image, shape) that accept the deletion mark are
+  // handled below; other inline nodes fall through to the default delete.
+  if (
+    !nodeAfter ||
+    !(nodeAfter.isText || (nodeAfter.isInline && nodeAfter.type.allowsMarkType(deletionType)))
+  ) {
+    return false;
+  }
 
   const hasOwnInsertion = nodeAfter.marks.some(
     (m) => m.type === insertionType && m.attrs.author === pluginState.author
