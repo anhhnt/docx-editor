@@ -138,6 +138,9 @@ export interface PainterOptions {
 }
 
 // @public
+export function renderAllPagesNow(container: HTMLElement): number;
+
+// @public
 export interface RenderContext {
     contentWidth?: number;
     insideTableCell?: boolean;

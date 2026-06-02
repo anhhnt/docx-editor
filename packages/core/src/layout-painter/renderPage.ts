@@ -88,7 +88,11 @@ export {
 export type { HeaderFooterContent, HeaderFooterLayoutInfo } from './renderPage/headerFooter';
 export { resolveHeaderFooterFloatingTablePosition } from './renderPage/headerFooter';
 export type { FootnoteRenderItem } from './renderPage/footnotes';
-export { renderPages, type RenderPagesUpdateKind } from './renderPage/virtualization';
+export {
+  renderPages,
+  renderAllPagesNow,
+  type RenderPagesUpdateKind,
+} from './renderPage/virtualization';
 
 /**
  * Page-level floating image that has been extracted from paragraphs.

@@ -33,6 +33,7 @@ import type {
 import {
   renderPage,
   renderPages,
+  renderAllPagesNow,
   type RenderContext,
   type RenderPagesUpdateKind,
 } from './renderPage';
@@ -47,6 +48,7 @@ import { renderTextBoxFragment, TEXTBOX_CLASS_NAMES } from './renderTextBox';
 export {
   renderPage,
   renderPages,
+  renderAllPagesNow,
   renderParagraphFragment,
   renderTableFragment,
   renderImageFragment,

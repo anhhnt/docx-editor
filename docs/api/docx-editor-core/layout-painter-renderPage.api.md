@@ -234,6 +234,9 @@ export function q(block: ParagraphBlock, line: MeasuredLine, alignment: 'left' |
 export function r(fragment: Fragment, context: RenderContext, options?: RenderFragmentOptions): HTMLElement;
 
 // @public
+export function renderAllPagesNow(container: HTMLElement): number;
+
+// @public
 export interface RenderContext {
     contentWidth?: number;
     insideTableCell?: boolean;
