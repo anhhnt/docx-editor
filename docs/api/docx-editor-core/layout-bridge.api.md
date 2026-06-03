@@ -80,14 +80,14 @@ export function collectFootnoteRefs(blocks: FlowBlock[]): Array<{
 }>;
 
 // @public
-export function computeHfCaretRectFromView(view: EditorView, doc?: globalThis.Document): {
+export function computeHfCaretRectFromView(view: EditorView, section: 'header' | 'footer', doc?: globalThis.Document): {
     top: number;
     left: number;
     height: number;
 } | null;
 
 // @public
-export function computeHfSelectionRectsFromView(view: EditorView, doc?: globalThis.Document): Array<{
+export function computeHfSelectionRectsFromView(view: EditorView, section: 'header' | 'footer', doc?: globalThis.Document): Array<{
     top: number;
     left: number;
     width: number;

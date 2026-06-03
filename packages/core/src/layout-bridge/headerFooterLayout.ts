@@ -365,16 +365,26 @@ export function convertHeaderFooterPmDocToContent(
  *
  * @public
  */
-// Resolved HF DOM snapshot cached between calls. Invalidated by the
-// painter's `painter:painted` event (`invalidateHfDomCache()` below) so
-// the snapshot is always at most one paint stale. Without this, every
-// HF caret + selection-rect computation re-walked every span on every
-// page, which on multi-page docs is O(pages × spans) per scroll-rAF.
-let hfDomCache: {
+type HfDomSnapshot = {
   host: HTMLElement;
   spans: HTMLElement[];
   ranged: HTMLElement[];
-} | null = null;
+};
+
+// Resolved HF DOM snapshot cached between calls, keyed by section. Invalidated
+// by the painter's `painter:painted` event (`invalidateHfDomCache()` below) so
+// the snapshot is always at most one paint stale. Without this, every
+// HF caret + selection-rect computation re-walked every span on every
+// page, which on multi-page docs is O(pages × spans) per scroll-rAF.
+//
+// Keyed by section because the header and footer are distinct PM docs painted
+// in distinct hosts. A single shared slot let the first match in DOM order
+// (always the header) shadow the footer, so an active footer's caret/selection
+// resolved against the header's spans (#671).
+const hfDomCache: { header: HfDomSnapshot | null; footer: HfDomSnapshot | null } = {
+  header: null,
+  footer: null,
+};
 
 /**
  * Drop the cached HF host + span lists. Hosts/painters call this after
@@ -385,22 +395,28 @@ let hfDomCache: {
  * @public
  */
 export function invalidateHfDomCache(): void {
-  hfDomCache = null;
+  hfDomCache.header = null;
+  hfDomCache.footer = null;
 }
 
 function getHfDomSnapshot(
+  section: 'header' | 'footer',
   doc: globalThis.Document
-): { host: HTMLElement; spans: HTMLElement[]; ranged: HTMLElement[] } | null {
-  if (hfDomCache && hfDomCache.host.isConnected) return hfDomCache;
+): HfDomSnapshot | null {
+  const cached = hfDomCache[section];
+  if (cached && cached.host.isConnected) return cached;
   // The same HF doc is painted on every page (shared by `r:id`). Pick the
-  // first painted host; its spans share PM coords with every other page's
-  // copy, so a single host suffices for caret resolution.
-  const host = doc.querySelector<HTMLElement>('.layout-page-header, .layout-page-footer');
+  // first painted host for the active section; its spans share PM coords with
+  // every other page's copy, so a single host suffices for caret resolution.
+  // Scoping to `.layout-page-${section}` keeps the header and footer from
+  // shadowing each other (#671).
+  const host = doc.querySelector<HTMLElement>(`.layout-page-${section}`);
   if (!host) return null;
   const spans = Array.from(host.querySelectorAll<HTMLElement>('span[data-pm-start][data-pm-end]'));
   const ranged = Array.from(host.querySelectorAll<HTMLElement>('[data-pm-start][data-pm-end]'));
-  hfDomCache = { host, spans, ranged };
-  return hfDomCache;
+  const snapshot = { host, spans, ranged };
+  hfDomCache[section] = snapshot;
+  return snapshot;
 }
 
 /**
@@ -427,12 +443,13 @@ function getHfDomSnapshot(
  */
 export function computeHfCaretRectFromView(
   view: EditorView,
+  section: 'header' | 'footer',
   doc: globalThis.Document = globalThis.document
 ): { top: number; left: number; height: number } | null {
   const sel = view.state.selection;
   if (!sel.empty) return null;
   const pmPos = sel.head;
-  const snapshot = getHfDomSnapshot(doc);
+  const snapshot = getHfDomSnapshot(section, doc);
   if (!snapshot) return null;
   const { host, spans } = snapshot;
   for (const span of spans) {
@@ -556,6 +573,7 @@ export function computeHfCaretRectFromView(
  */
 export function computeHfSelectionRectsFromView(
   view: EditorView,
+  section: 'header' | 'footer',
   doc: globalThis.Document = globalThis.document
 ): Array<{ top: number; left: number; width: number; height: number }> {
   const sel = view.state.selection;
@@ -564,10 +582,11 @@ export function computeHfSelectionRectsFromView(
   const to = sel.to;
   const out: Array<{ top: number; left: number; width: number; height: number }> = [];
 
-  // Reuse the cached HF DOM snapshot. Every painted HF host shares the
-  // same PM coord space (only one HF doc, painted N times for the N
-  // pages), so a single host's spans suffice for selection rects.
-  const snapshot = getHfDomSnapshot(doc);
+  // Reuse the cached HF DOM snapshot for this section. Every painted HF host
+  // for the section shares the same PM coord space (only one HF doc, painted N
+  // times for the N pages), so a single host's spans suffice for selection
+  // rects.
+  const snapshot = getHfDomSnapshot(section, doc);
   if (!snapshot) return out;
   const { host, spans } = snapshot;
   for (const spanEl of spans) {
