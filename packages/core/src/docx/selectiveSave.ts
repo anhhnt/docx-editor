@@ -28,6 +28,7 @@ import {
   COMMENTS_EXTENSIBLE_CONTENT_TYPE,
 } from './rezip';
 import { RELATIONSHIP_TYPES } from './relsParser';
+import { headerFooterFilename } from './rezip/parts';
 
 /**
  * Check if document content has new images (data: URL without rId) or
@@ -113,6 +114,23 @@ export async function attemptSelectiveSave(
     const JSZip = (await import('jszip')).default;
     const zip = await JSZip.loadAsync(originalBuffer);
     const updates = new Map<string, string>();
+
+    // Bail when the model references a header/footer part that the original
+    // archive doesn't contain — e.g. applying a watermark created a new
+    // first-page/even header part. Selective save writes the part body but
+    // can't register it in [Content_Types].xml / document.xml.rels (that's
+    // full-repack territory), so a new part would dangle. Fall back.
+    const rels = doc.package.relationships;
+    if (rels) {
+      for (const rel of rels.values()) {
+        if (!rel.target) continue;
+        if (rel.type !== RELATIONSHIP_TYPES.header && rel.type !== RELATIONSHIP_TYPES.footer) {
+          continue;
+        }
+        const partPath = headerFooterFilename(rel.target).replace(/^\//, '');
+        if (!zip.file(partPath)) return null;
+      }
+    }
 
     // Patch document.xml if paragraphs changed
     if (changedParaIds.size > 0) {

@@ -19,7 +19,8 @@ import {
   countParagraphElements,
 } from './selectiveXmlPatch';
 import { serializeDocument } from './serializer/documentSerializer';
-import type { Paragraph, Run } from '../types/document';
+import { RELATIONSHIP_TYPES } from './relsParser';
+import type { Paragraph, Run, TextWatermark } from '../types/document';
 
 // ============================================================================
 // Helpers
@@ -924,5 +925,55 @@ describe('Selective save edge cases', () => {
         }
       }
     }
+  });
+});
+
+// ============================================================================
+// Watermark header-part registration
+// ============================================================================
+
+describe('attemptSelectiveSave — watermark header parts', () => {
+  const WM: TextWatermark = {
+    kind: 'text',
+    text: 'CONFIDENTIAL',
+    font: 'Calibri',
+    color: '#C0C0C0',
+    semitransparent: true,
+    layout: 'diagonal',
+  };
+  const NO_CHANGES = {
+    changedParaIds: new Set<string>(),
+    structuralChange: false,
+    hasUntrackedChanges: false,
+  };
+
+  test('a normal doc whose header parts all exist does not falsely bail', async () => {
+    const buffer = await loadFixture('section-inheritance-header-footer.docx');
+    const doc = await parseDocx(buffer);
+    // No new parts → selective save should proceed (returns a buffer).
+    const result = await attemptSelectiveSave(doc, buffer, NO_CHANGES);
+    expect(result).not.toBeNull();
+  });
+
+  test('bails to full repack when a watermark created a new header part', async () => {
+    const buffer = await loadFixture('section-inheritance-header-footer.docx');
+    const doc = await parseDocx(buffer);
+    // Simulate setDocumentWatermark creating a first-page header part that is
+    // not present in the original archive (e.g. a title-page watermark).
+    doc.package.relationships!.set('rIdWmHdrFirst', {
+      id: 'rIdWmHdrFirst',
+      type: RELATIONSHIP_TYPES.header,
+      target: 'headerWatermark.xml',
+    });
+    doc.package.headers!.set('rIdWmHdrFirst', {
+      type: 'header',
+      hdrFtrType: 'first',
+      content: [],
+      watermark: WM,
+    });
+
+    // Selective save can't register the new part, so it must fall back.
+    const result = await attemptSelectiveSave(doc, buffer, NO_CHANGES);
+    expect(result).toBeNull();
   });
 });

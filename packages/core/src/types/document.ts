@@ -145,6 +145,8 @@ export type {
   DocumentBody,
 } from './content';
 
+export { pictureWatermarkDisplayEmu } from './content';
+
 // Styles, Theme, Fonts, Relationships & Media
 export type {
   StyleType,

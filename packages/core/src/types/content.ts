@@ -105,6 +105,7 @@ export type {
 } from './content/headerFooter';
 
 export type { TextWatermark, PictureWatermark, Watermark } from './content/watermark';
+export { pictureWatermarkDisplayEmu } from './content/watermark';
 
 export type {
   PageOrientation,

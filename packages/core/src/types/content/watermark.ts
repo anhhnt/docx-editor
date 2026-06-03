@@ -64,3 +64,36 @@ export interface PictureWatermark {
  * A document watermark — text or picture.
  */
 export type Watermark = TextWatermark | PictureWatermark;
+
+/**
+ * Default on-page extent of a picture watermark, in EMUs (~4.32in / 311.4pt),
+ * matching the size MS Word uses. The larger of the image's sides is fit to
+ * this; the other side is derived from the aspect ratio.
+ */
+const PICTURE_WATERMARK_MAX_EMU = 3_954_780; // 311.4pt × 12700 EMU/pt
+
+/**
+ * Compute the display dimensions (in EMUs) for a picture watermark from the
+ * source image's natural pixel size. Bounds the larger side to a page-sized
+ * default and derives the other from the aspect ratio, so the watermark is
+ * never distorted (the serializer would otherwise force a square) and never
+ * overflows the page. Returns `undefined` for an unusable size (zero/NaN),
+ * letting callers fall back to defaults.
+ */
+export function pictureWatermarkDisplayEmu(
+  naturalWidthPx: number,
+  naturalHeightPx: number
+): { widthEmu: number; heightEmu: number } | undefined {
+  if (!(naturalWidthPx > 0) || !(naturalHeightPx > 0)) return undefined;
+  const aspect = naturalWidthPx / naturalHeightPx;
+  if (aspect >= 1) {
+    return {
+      widthEmu: PICTURE_WATERMARK_MAX_EMU,
+      heightEmu: Math.round(PICTURE_WATERMARK_MAX_EMU / aspect),
+    };
+  }
+  return {
+    widthEmu: Math.round(PICTURE_WATERMARK_MAX_EMU * aspect),
+    heightEmu: PICTURE_WATERMARK_MAX_EMU,
+  };
+}
