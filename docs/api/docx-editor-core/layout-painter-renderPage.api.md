@@ -299,6 +299,14 @@ export function resolveHeaderFooterFloatingTablePosition(floating: NonNullable<T
 };
 
 // @public
+export function resolveHeaderFooterFloatLeft(width: number, h: {
+    relativeTo?: string;
+    posOffset?: number;
+    align?: string;
+    alignment?: string;
+} | undefined, layout: HeaderFooterLayoutInfo): string;
+
+// @public
 export function s(fragment: ParagraphFragment, block: ParagraphBlock, measure: ParagraphMeasure, context: RenderContext, options?: RenderParagraphOptions): HTMLElement;
 
 // @public

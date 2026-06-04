@@ -120,6 +120,37 @@ function resolveHeaderFooterFloatTop(
   return floatImg.paragraphY;
 }
 
+/**
+ * Resolve the CSS `left` (px) for an anchored object (image or text box) in a
+ * header/footer, honoring `wp:positionH` (relativeTo page/margin, align
+ * left/center/right, or posOffset). Shared by floating images and text boxes so
+ * a page-centered text box in the header lands centered like Word, not pinned
+ * to the left.
+ */
+export function resolveHeaderFooterFloatLeft(
+  width: number,
+  h: { relativeTo?: string; posOffset?: number; align?: string; alignment?: string } | undefined,
+  layout: HeaderFooterLayoutInfo
+): string {
+  if (!h) return '0';
+  const align = getPositionAlignment(h);
+
+  if (h.relativeTo === 'page') {
+    if (h.posOffset !== undefined) return `${emuToPixels(h.posOffset) - layout.flowLeft}px`;
+    if (align === 'right') return `${layout.pageWidth - width - layout.flowLeft}px`;
+    if (align === 'center') return `${(layout.pageWidth - width) / 2 - layout.flowLeft}px`;
+    if (align === 'left') return `${-layout.flowLeft}px`;
+  }
+
+  // `relativeTo: margin` falls through here intentionally: the HF content width
+  // IS the margin box, so the content-relative branch is already margin-correct.
+  if (h.posOffset !== undefined) return `${emuToPixels(h.posOffset)}px`;
+  if (align === 'right') return `${layout.contentWidth - width}px`;
+  if (align === 'center') return `${(layout.contentWidth - width) / 2}px`;
+
+  return '0';
+}
+
 function applyHeaderFooterFloatHorizontalPosition(
   img: HTMLImageElement,
   floatImg: {
@@ -130,48 +161,11 @@ function applyHeaderFooterFloatHorizontalPosition(
   },
   layout: HeaderFooterLayoutInfo
 ): void {
-  const h = floatImg.position.horizontal;
-  if (!h) {
-    img.style.left = '0';
-    return;
-  }
-
-  const align = getPositionAlignment(h);
-
-  if (h.relativeTo === 'page') {
-    if (h.posOffset !== undefined) {
-      img.style.left = `${emuToPixels(h.posOffset) - layout.flowLeft}px`;
-      return;
-    }
-    if (align === 'right') {
-      img.style.left = `${layout.pageWidth - floatImg.width - layout.flowLeft}px`;
-      return;
-    }
-    if (align === 'center') {
-      img.style.left = `${(layout.pageWidth - floatImg.width) / 2 - layout.flowLeft}px`;
-      return;
-    }
-    if (align === 'left') {
-      img.style.left = `${-layout.flowLeft}px`;
-      return;
-    }
-  }
-
-  if (h.posOffset !== undefined) {
-    img.style.left = `${emuToPixels(h.posOffset)}px`;
-    return;
-  }
-
-  if (align === 'right') {
-    img.style.left = `${layout.contentWidth - floatImg.width}px`;
-    return;
-  }
-  if (align === 'center') {
-    img.style.left = `${(layout.contentWidth - floatImg.width) / 2}px`;
-    return;
-  }
-
-  img.style.left = '0';
+  img.style.left = resolveHeaderFooterFloatLeft(
+    floatImg.width,
+    floatImg.position.horizontal,
+    layout
+  );
 }
 
 /**
@@ -433,8 +427,17 @@ export function renderHeaderFooterContent(
         { ...context, positioning: 'absolute' },
         { document: doc }
       );
+      // Vertical position stays on the HF flow cursor (the anchor's positionV
+      // is not yet honored for HF text boxes); only the horizontal anchor is
+      // resolved here, which is what the reported page-centered banner needs.
       fragEl.style.top = `${cursorY}px`;
-      fragEl.style.left = '0';
+      // Honor the anchor's horizontal position (e.g. centered relative to the
+      // page) instead of pinning the box to the left.
+      fragEl.style.left = resolveHeaderFooterFloatLeft(
+        measure.width,
+        block.position?.horizontal,
+        layout
+      );
       containerEl.appendChild(fragEl);
       cursorY += measure.height;
     } else if (

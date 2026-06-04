@@ -91,7 +91,10 @@ export {
   type FloatingImagesLayerOptions,
 } from './floatingImageLayer';
 export type { HeaderFooterContent, HeaderFooterLayoutInfo } from './renderPage/headerFooter';
-export { resolveHeaderFooterFloatingTablePosition } from './renderPage/headerFooter';
+export {
+  resolveHeaderFooterFloatingTablePosition,
+  resolveHeaderFooterFloatLeft,
+} from './renderPage/headerFooter';
 export type { FootnoteRenderItem } from './renderPage/footnotes';
 export {
   renderPages,
