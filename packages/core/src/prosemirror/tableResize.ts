@@ -104,7 +104,13 @@ export function commitColumnResize(
   const widths = [...((node.attrs.columnWidths as number[]) ?? [])];
   widths[colIdx] = newLeft;
   widths[colIdx + 1] = newRight;
-  tr.setNodeMarkup(tablePos, undefined, { ...node.attrs, columnWidths: widths });
+  // Switch to fixed layout so Word honors the explicit widths — autofit would
+  // recompute columns to fit content and discard the resize (issue #781).
+  tr.setNodeMarkup(tablePos, undefined, {
+    ...node.attrs,
+    columnWidths: widths,
+    tableLayout: 'fixed',
+  });
 
   let rowOffset = tablePos + 1;
   node.forEach((row) => {
@@ -174,7 +180,12 @@ export function commitRightEdgeResize(
   const tr = view.state.tr;
   const widths = [...((node.attrs.columnWidths as number[]) ?? [])];
   widths[colIdx] = newWidth;
-  tr.setNodeMarkup(tablePos, undefined, { ...node.attrs, columnWidths: widths });
+  // Fixed layout so Word honors the explicit widths (issue #781).
+  tr.setNodeMarkup(tablePos, undefined, {
+    ...node.attrs,
+    columnWidths: widths,
+    tableLayout: 'fixed',
+  });
 
   let rowOffset = tablePos + 1;
   node.forEach((row) => {

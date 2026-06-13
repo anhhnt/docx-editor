@@ -384,15 +384,25 @@ export function serializeTableFormatting(
   const parts: string[] = [];
 
   if (formatting) {
+    // Children must follow the CT_TblPrBase sequence (wml.xsd):
+    // tblStyle, tblpPr, tblOverlap, bidiVisual, tblW, jc, tblCellSpacing,
+    // tblInd, tblBorders, shd, tblLayout, tblCellMar, tblLook. Word repairs
+    // out-of-order children, but strict validators reject them.
+
     // Table style (must be first)
     if (formatting.styleId) {
       parts.push(`<w:tblStyle w:val="${escapeXml(formatting.styleId)}"/>`);
     }
 
-    // Floating table properties
+    // Floating table properties (w:tblpPr)
     const floatingXml = serializeFloatingTableProperties(formatting.floating);
     if (floatingXml) {
       parts.push(floatingXml);
+    }
+
+    // Overlap
+    if (formatting.overlap) {
+      parts.push(`<w:tblOverlap w:val="${formatting.overlap}"/>`);
     }
 
     // Bidirectional
@@ -429,10 +439,10 @@ export function serializeTableFormatting(
       parts.push(bordersXml);
     }
 
-    // Default cell margins
-    const marginsXml = serializeCellMargins(formatting.cellMargins, 'tblCellMar');
-    if (marginsXml) {
-      parts.push(marginsXml);
+    // Shading
+    const shadingXml = serializeShading(formatting.shading);
+    if (shadingXml) {
+      parts.push(shadingXml);
     }
 
     // Table layout
@@ -440,21 +450,16 @@ export function serializeTableFormatting(
       parts.push(`<w:tblLayout w:type="${formatting.layout}"/>`);
     }
 
-    // Shading
-    const shadingXml = serializeShading(formatting.shading);
-    if (shadingXml) {
-      parts.push(shadingXml);
+    // Default cell margins
+    const marginsXml = serializeCellMargins(formatting.cellMargins, 'tblCellMar');
+    if (marginsXml) {
+      parts.push(marginsXml);
     }
 
     // Table look
     const lookXml = serializeTableLook(formatting.look);
     if (lookXml) {
       parts.push(lookXml);
-    }
-
-    // Overlap
-    if (formatting.overlap) {
-      parts.push(`<w:tblOverlap w:val="${formatting.overlap}"/>`);
     }
   }
 

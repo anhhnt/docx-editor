@@ -104,6 +104,9 @@ export function makeCreateTable(schema: Schema) {
         columnWidths,
         width: contentWidthTwips,
         widthType: 'dxa',
+        // Fixed layout so the explicit column widths the editor renders are
+        // honored on export — autofit lets Word recompute them (issue #781).
+        tableLayout: 'fixed',
       },
       tableRows
     );

@@ -23,6 +23,10 @@ export const tableSpec: NodeSpec = {
     widthType: { default: null },
     justification: { default: null },
     columnWidths: { default: null },
+    // `w:tblLayout` type ('fixed' | 'autofit'). Tracked as a first-class attr
+    // so explicit column widths survive the round-trip: without `fixed`, Word
+    // autofits and ignores `w:tblGrid`/`w:tcW` (issue #781).
+    tableLayout: { default: null },
     floating: { default: null },
     cellMargins: { default: null },
     look: { default: null },

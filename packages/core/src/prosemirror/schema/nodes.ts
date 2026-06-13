@@ -273,6 +273,8 @@ export interface TableAttrs {
   justification?: 'left' | 'center' | 'right';
   /** Column widths (in twips) from w:tblGrid */
   columnWidths?: number[];
+  /** Table layout (`w:tblLayout` type). `fixed` makes Word honor explicit widths. */
+  tableLayout?: 'fixed' | 'autofit' | null;
   /** Floating table properties (w:tblpPr) */
   floating?: FloatingTableProperties;
   /** Default cell margins for the table (w:tblCellMar), in twips */

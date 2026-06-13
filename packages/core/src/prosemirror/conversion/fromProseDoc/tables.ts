@@ -250,6 +250,10 @@ function tableAttrsToFormatting(attrs: TableAttrs): TableFormatting | undefined 
     if (attrs.floating !== (orig.floating || undefined)) {
       result.floating = attrs.floating || undefined;
     }
+    // Layout: a column resize switches the table to fixed layout (issue #781).
+    if (attrs.tableLayout !== (orig.layout || undefined)) {
+      result.layout = attrs.tableLayout || undefined;
+    }
     if (attrs.look !== (orig.look || undefined)) {
       result.look = attrs.look || undefined;
     }
@@ -298,6 +302,7 @@ function tableAttrsToFormatting(attrs: TableAttrs): TableFormatting | undefined 
     attrs.width != null ||
     attrs.widthType ||
     attrs.justification ||
+    attrs.tableLayout ||
     attrs.floating ||
     attrs.cellMargins ||
     attrs.look;
@@ -341,6 +346,7 @@ function tableAttrsToFormatting(attrs: TableAttrs): TableFormatting | undefined 
     styleId: attrs.styleId || undefined,
     width,
     justification: attrs.justification || undefined,
+    layout: attrs.tableLayout || undefined,
     floating: attrs.floating || undefined,
     cellMargins,
     look: attrs.look || undefined,

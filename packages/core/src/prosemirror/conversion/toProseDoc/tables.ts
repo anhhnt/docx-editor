@@ -239,6 +239,7 @@ export function convertTable(
     widthType: table.formatting?.width?.type,
     justification: table.formatting?.justification,
     columnWidths: columnWidths,
+    tableLayout: table.formatting?.layout ?? null,
     floating: table.formatting?.floating,
     cellMargins: cellMarginsAttr,
     look: table.formatting?.look,
