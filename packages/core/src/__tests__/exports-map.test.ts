@@ -143,6 +143,7 @@ describe('package.json exports map', () => {
       './managers/types',
       './prosemirror/commands/formatting',
       './prosemirror/commands/pageBreak',
+      './prosemirror/commands/sectionBreak',
       './prosemirror/commands/paragraph',
       './prosemirror/conversion/fromProseDoc',
       './prosemirror/plugins/selectionTracker',

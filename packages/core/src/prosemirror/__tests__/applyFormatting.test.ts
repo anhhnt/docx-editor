@@ -16,7 +16,9 @@ import type { Transaction } from 'prosemirror-state';
 import { singletonManager } from '../schema';
 import { createStyleResolver } from '../styles';
 import type { StyleDefinitions } from '../../types/document';
-import { applyFormatting, setParagraphStyle } from '../applyFormatting';
+import { applyFormatting, setParagraphStyle, insertBreak } from '../applyFormatting';
+import { fromProseDoc } from '../conversion/fromProseDoc';
+import { serializeDocumentBody } from '../../docx/serializer/documentSerializer';
 
 const schema = singletonManager.getSchema();
 
@@ -148,5 +150,99 @@ describe('setParagraphStyle', () => {
     );
 
     expect(viewReact.state.doc.toJSON()).toEqual(viewVue.state.doc.toJSON());
+  });
+});
+
+describe('insertBreak', () => {
+  test('page break inserts a single pageBreak node after the target paragraph', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    const ok = insertBreak(view, { paraId: 'AAA', type: 'page' });
+    expect(ok).toBe(true);
+    const kinds = view.state.doc.content.content.map((n) => n.type.name);
+    // pageBreak sits between the two existing paragraphs — no spurious empty
+    // paragraph (matches the headless reviewer-bridge shape).
+    expect(kinds).toEqual(['paragraph', 'pageBreak', 'paragraph']);
+    expect(view.state.doc.firstChild?.textContent).toBe('first');
+    expect(view.state.doc.lastChild?.textContent).toBe('second');
+  });
+
+  test('sectionNextPage marks the target paragraph without adding a block', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    const ok = insertBreak(view, { paraId: 'AAA', type: 'sectionNextPage' });
+    expect(ok).toBe(true);
+    expect(view.state.doc.childCount).toBe(2);
+    expect(view.state.doc.firstChild?.attrs.sectionBreakType).toBe('nextPage');
+    expect(view.state.doc.firstChild?.textContent).toBe('first');
+  });
+
+  test('sectionContinuous marks the target paragraph without adding a block', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    const ok = insertBreak(view, { paraId: 'AAA', type: 'sectionContinuous' });
+    expect(ok).toBe(true);
+    expect(view.state.doc.childCount).toBe(2);
+    expect(view.state.doc.firstChild?.attrs.sectionBreakType).toBe('continuous');
+  });
+
+  test('returns false for an unresolvable paraId, without dispatching', () => {
+    const view = makeView(para('AAA', 'hello'));
+    const before = view.state;
+    expect(insertBreak(view, { paraId: 'ZZZ', type: 'page' })).toBe(false);
+    expect(view.state).toBe(before);
+  });
+
+  test('refuses to break a paragraph nested in a table cell, without dispatching', () => {
+    // A page-break node is invalid in a cell's schema and a sectPr nested in a
+    // w:tc is invalid OOXML — so a cell-targeted break must be a no-op (matching
+    // the headless reviewer bridge, which only addresses top-level paragraphs).
+    const cellPara = schema.nodes.paragraph.create({ paraId: 'CELL' }, schema.text('in cell'));
+    const cell = schema.nodes.tableCell.create(null, cellPara);
+    const table = schema.nodes.table.create(null, schema.nodes.tableRow.create(null, cell));
+    const doc = schema.nodes.doc.create(null, [para('AAA', 'body'), table]);
+    const view = {
+      state: EditorState.create({ schema, doc }),
+      dispatch(tr: Transaction) {
+        (view as { state: EditorState }).state = view.state.apply(tr);
+      },
+    } as unknown as EditorView & { state: EditorState };
+    const before = view.state;
+
+    expect(insertBreak(view, { paraId: 'CELL', type: 'page' })).toBe(false);
+    expect(insertBreak(view, { paraId: 'CELL', type: 'sectionNextPage' })).toBe(false);
+    expect(view.state).toBe(before);
+  });
+});
+
+// End-to-end: an agent-inserted break must survive PM -> fromProseDoc ->
+// serializer as valid OOXML, not just produce the right PM state.
+describe('insertBreak round-trips to OOXML', () => {
+  test('sectionNextPage emits a w:pPr/w:sectPr on the target paragraph', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    expect(insertBreak(view, { paraId: 'AAA', type: 'sectionNextPage' })).toBe(true);
+
+    const xml = serializeDocumentBody(fromProseDoc(view.state.doc).package.document);
+    // The section break lives inside the first paragraph's pPr, before its run.
+    expect(xml).toMatch(
+      /<w:p\b[^>]*><w:pPr><w:sectPr>.*?<w:type w:val="nextPage"\/>.*?<\/w:sectPr><\/w:pPr>/s
+    );
+    expect(xml).toContain('<w:t>first</w:t>');
+    expect(xml).toContain('<w:t>second</w:t>');
+  });
+
+  test('sectionContinuous emits w:type val="continuous"', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    expect(insertBreak(view, { paraId: 'AAA', type: 'sectionContinuous' })).toBe(true);
+
+    const xml = serializeDocumentBody(fromProseDoc(view.state.doc).package.document);
+    expect(xml).toMatch(/<w:sectPr>.*?<w:type w:val="continuous"\/>.*?<\/w:sectPr>/s);
+  });
+
+  test('page break emits a w:br page run between the paragraphs', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    expect(insertBreak(view, { paraId: 'AAA', type: 'page' })).toBe(true);
+
+    const xml = serializeDocumentBody(fromProseDoc(view.state.doc).package.document);
+    expect(xml).toContain('<w:br w:type="page"/>');
+    // No stray section break for a plain page break.
+    expect(xml).not.toContain('<w:sectPr>');
   });
 });

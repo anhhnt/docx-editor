@@ -64,6 +64,7 @@ export default defineConfig([
       'managers/types': 'src/managers/types.ts',
       'prosemirror/commands/formatting': 'src/prosemirror/commands/formatting.ts',
       'prosemirror/commands/pageBreak': 'src/prosemirror/commands/pageBreak.ts',
+      'prosemirror/commands/sectionBreak': 'src/prosemirror/commands/sectionBreak.ts',
       'prosemirror/commands/paragraph': 'src/prosemirror/commands/paragraph.ts',
       'prosemirror/conversion/fromProseDoc': 'src/prosemirror/conversion/fromProseDoc.ts',
       'prosemirror/plugins/selectionTracker': 'src/prosemirror/plugins/selectionTracker.ts',

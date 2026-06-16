@@ -1,12 +1,13 @@
 /**
- * Agent-facing formatting operations shared by the React and Vue adapters.
+ * Agent-facing edit operations shared by the React and Vue adapters.
  *
  * `applyFormatting` maps a mark-toggle request (bold/italic/underline/strike/
  * color/highlight/fontSize/fontFamily) onto a PM transaction over a paragraph
  * range located by `paraId` (+ optional `search`). `setParagraphStyle` applies
- * a named paragraph style to that range.
+ * a named paragraph style to that range. `insertBreak` inserts a page or
+ * section break after the paragraph located by `paraId`.
  *
- * Both take the `EditorView` as a parameter. `setParagraphStyle` takes the
+ * All take the `EditorView` as a parameter. `setParagraphStyle` takes the
  * style resolver as an injected dependency so each adapter keeps its own
  * resolver-sourcing strategy (React caches per styles object; Vue rebuilds).
  *
@@ -188,4 +189,74 @@ export function setParagraphStyle(
   });
 
   return didApply;
+}
+
+/** Kind of break `insertBreak` can insert after a paragraph. */
+export type BreakKind = 'page' | 'sectionNextPage' | 'sectionContinuous';
+
+export interface InsertBreakOptions {
+  paraId: string;
+  type: BreakKind;
+}
+
+/**
+ * Insert a page or section break after the paragraph identified by `paraId`.
+ *
+ * This is the agent edit path. It produces the same document shape as the
+ * headless `reviewerBridge.insertBreak` (so a given `insert_break` call yields
+ * identical output whether the agent drives a live editor or the headless
+ * reviewer) — which is intentionally leaner than the interactive Insert > Break
+ * menu command:
+ *
+ * - `page`: insert a single page-break node right after the target paragraph.
+ *   `fromProseDoc` converts it to a break-run paragraph, matching the headless
+ *   model. No trailing empty paragraph (the menu command adds one for caret
+ *   placement; the agent keeps the caret where it was).
+ * - `sectionNextPage` / `sectionContinuous`: a section break is the `sectPr`
+ *   carried by the section's *last* paragraph, so mark the target paragraph
+ *   directly. No new block — the existing following paragraph starts the new
+ *   section.
+ *
+ * The user's selection is preserved (mapped through the edit) rather than
+ * following the inserted break. Returns false when the paraId can't be resolved,
+ * the target isn't a top-level paragraph, or `type` is unknown.
+ */
+export function insertBreak(view: EditorView, options: InsertBreakOptions): boolean {
+  const range = findParaIdRange(view.state.doc, options.paraId);
+  if (!range) return false;
+
+  const { state } = view;
+  // `range.from` is the position of the target paragraph node itself;
+  // `range.to` is just after its closing token.
+  const targetPara = state.doc.nodeAt(range.from);
+  if (!targetPara) return false;
+
+  // Breaks belong on top-level body paragraphs. `findParaIdRange` matches
+  // paragraphs anywhere (incl. table cells / block SDTs), but a `w:sectPr` or
+  // page-break node nested in a cell is invalid OOXML — and a page-break node
+  // isn't even allowed by the cell schema (the insert would throw). Mirror the
+  // headless reviewer bridge, which only resolves top-level paragraphs.
+  if (state.doc.resolve(range.from).depth !== 0) return false;
+
+  const tr = state.tr;
+
+  if (options.type === 'page') {
+    const pageBreakType = state.schema.nodes.pageBreak;
+    if (!pageBreakType) return false;
+    tr.insert(range.to, pageBreakType.create());
+  } else if (options.type === 'sectionNextPage' || options.type === 'sectionContinuous') {
+    const sectionBreakType = options.type === 'sectionNextPage' ? 'nextPage' : 'continuous';
+    tr.setNodeMarkup(range.from, undefined, {
+      ...targetPara.attrs,
+      sectionBreakType,
+    });
+  } else {
+    return false;
+  }
+
+  // Map the caller's selection through the structural edit so the caret stays
+  // put instead of jumping to the break.
+  tr.setSelection(state.selection.map(tr.doc, tr.mapping));
+  view.dispatch(tr);
+  return true;
 }

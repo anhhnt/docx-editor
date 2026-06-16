@@ -298,6 +298,11 @@
       "import": "./dist/prosemirror/commands/pageBreak.mjs",
       "require": "./dist/prosemirror/commands/pageBreak.js"
     },
+    "./prosemirror/commands/sectionBreak": {
+      "types": "./dist/prosemirror/commands/sectionBreak.d.ts",
+      "import": "./dist/prosemirror/commands/sectionBreak.mjs",
+      "require": "./dist/prosemirror/commands/sectionBreak.js"
+    },
     "./prosemirror/commands/paragraph": {
       "types": "./dist/prosemirror/commands/paragraph.d.ts",
       "import": "./dist/prosemirror/commands/paragraph.mjs",
@@ -541,6 +546,9 @@
       ],
       "prosemirror/commands/pageBreak": [
         "./dist/prosemirror/commands/pageBreak.d.ts"
+      ],
+      "prosemirror/commands/sectionBreak": [
+        "./dist/prosemirror/commands/sectionBreak.d.ts"
       ],
       "prosemirror/commands/paragraph": [
         "./dist/prosemirror/commands/paragraph.d.ts"

@@ -117,6 +117,9 @@ export type { TableContextInfo, BorderPreset } from './table';
 // Page break
 export { insertPageBreak } from './pageBreak';
 
+// Section breaks
+export { insertSectionBreakNextPage, insertSectionBreakContinuous } from './sectionBreak';
+
 // Image commands
 export {
   setImageWrapType,
