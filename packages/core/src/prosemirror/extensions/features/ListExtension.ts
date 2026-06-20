@@ -6,6 +6,7 @@
  */
 
 import type { Command, EditorState } from 'prosemirror-state';
+import type { Node as PMNode } from 'prosemirror-model';
 import { createExtension } from '../create';
 import { Priority } from '../types';
 import type { ExtensionRuntime } from '../types';
@@ -70,56 +71,169 @@ function appendParagraphPropertyChange(
 // LIST COMMANDS
 // ============================================================================
 
-function toggleList(numId: number): Command {
+/** List-rendering attrs that must be reset when toggling lists via the toolbar. */
+const CLEARED_LIST_RENDERING_ATTRS = {
+  listStartOverride: null,
+  listAbstractNumId: null,
+  listLevelNumFmts: null,
+  listMarkerHidden: null,
+  listMarkerFontFamily: null,
+  listMarkerFontSize: null,
+  listMarkerSuffix: null,
+  numPrFromStyle: null,
+} as const;
+
+function clearedListAttrs(): Record<string, unknown> {
+  return {
+    numPr: null,
+    listIsBullet: null,
+    listNumFmt: null,
+    listMarker: null,
+    ...CLEARED_LIST_RENDERING_ATTRS,
+  };
+}
+
+type ListKind = 'bullet' | 'numbered';
+
+function isBulletListItem(attrs: Record<string, unknown>): boolean {
+  return !!(attrs.numPr as { numId?: number } | null)?.numId && attrs.listIsBullet === true;
+}
+
+function isNumberedListItem(attrs: Record<string, unknown>): boolean {
+  return !!(attrs.numPr as { numId?: number } | null)?.numId && attrs.listIsBullet === false;
+}
+
+function isListItemOfKind(attrs: Record<string, unknown>, kind: ListKind): boolean {
+  return kind === 'bullet' ? isBulletListItem(attrs) : isNumberedListItem(attrs);
+}
+
+function collectUsedNumIds(doc: PMNode): Set<number> {
+  const used = new Set<number>();
+  doc.descendants((node) => {
+    if (node.type.name !== 'paragraph') return true;
+    const numId = (node.attrs.numPr as { numId?: number } | null)?.numId;
+    if (typeof numId === 'number' && numId > 0) used.add(numId);
+    return true;
+  });
+  return used;
+}
+
+function allocateNumId(used: Set<number>): number {
+  let id = 1;
+  while (used.has(id)) id += 1;
+  return id;
+}
+
+/** Immediate previous sibling when it is a paragraph; tables/other blocks break the chain. */
+function getPreviousSiblingParagraph(doc: PMNode, pos: number): PMNode | null {
+  const $pos = doc.resolve(pos);
+  const index = $pos.index($pos.depth);
+  if (index === 0) return null;
+  const prev = $pos.parent.child(index - 1);
+  return prev.type.name === 'paragraph' ? prev : null;
+}
+
+function continuesPriorList(doc: PMNode, pos: number, kind: ListKind): { numId: number } | null {
+  const prev = getPreviousSiblingParagraph(doc, pos);
+  if (!prev || !isListItemOfKind(prev.attrs as Record<string, unknown>, kind)) return null;
+  const numId = (prev.attrs.numPr as { numId: number }).numId;
+  return { numId };
+}
+
+function areAdjacentSiblings(prevPos: number, prevNode: PMNode, pos: number): boolean {
+  return prevPos + prevNode.nodeSize === pos;
+}
+
+function listAttrsForSegment(
+  kind: ListKind,
+  numId: number,
+  ilvl: number,
+  startOverride: number | null = null
+): Record<string, unknown> {
+  const isBullet = kind === 'bullet';
+  return {
+    numPr: { numId, ilvl },
+    listIsBullet: isBullet,
+    listNumFmt: isBullet ? null : 'decimal',
+    listMarker: null,
+    ...CLEARED_LIST_RENDERING_ATTRS,
+    listStartOverride: startOverride,
+  };
+}
+
+function toggleListKind(kind: ListKind): Command {
   return (state, dispatch) => {
     const { $from, $to } = state.selection;
 
     const paragraph = $from.parent;
     if (paragraph.type.name !== 'paragraph') return false;
 
-    const currentNumPr = paragraph.attrs.numPr;
-    const isInSameList = currentNumPr?.numId === numId;
+    const isInSameKindList = isListItemOfKind(paragraph.attrs as Record<string, unknown>, kind);
 
     if (!dispatch) return true;
 
+    const paragraphs: { pos: number; node: PMNode }[] = [];
+    state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
+      if (node.type.name === 'paragraph') paragraphs.push({ pos, node });
+    });
+    paragraphs.sort((a, b) => a.pos - b.pos);
+
     let tr = state.tr;
-    const seen = new Set<number>();
+    const touched = new Set<number>();
 
     // In suggesting mode, track the numbering change as a paragraph-property
     // revision so it can be reviewed and Reject reverts it. One toggle = one
     // revision id shared across every paragraph it touches (null when off).
     const rev = makeRevisionInfo(state);
+    const usedNumIds = collectUsedNumIds(state.doc);
+    let batchNumId: number | null = null;
 
-    state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
-      if (node.type.name === 'paragraph' && !seen.has(pos)) {
-        seen.add(pos);
+    for (let i = 0; i < paragraphs.length; i += 1) {
+      const { pos, node } = paragraphs[i];
+      if (touched.has(pos)) continue;
+      touched.add(pos);
 
-        const priorNumPr = node.attrs.numPr;
-        let nextAttrs: Record<string, unknown>;
-        if (isInSameList) {
-          nextAttrs = {
-            ...node.attrs,
-            numPr: null,
-            listIsBullet: null,
-            listNumFmt: null,
-            listMarker: null,
-          };
+      const priorNumPr = node.attrs.numPr;
+      let nextAttrs: Record<string, unknown>;
+
+      if (isInSameKindList) {
+        nextAttrs = { ...node.attrs, ...clearedListAttrs() };
+      } else {
+        const ilvl = (node.attrs.numPr as { ilvl?: number } | null)?.ilvl ?? 0;
+        let numId: number;
+        let startOverride: number | null = null;
+
+        const prevInBatch = i > 0 ? paragraphs[i - 1] : null;
+        if (prevInBatch && areAdjacentSiblings(prevInBatch.pos, prevInBatch.node, pos)) {
+          // Adjacent paragraphs toggled together share one new list instance.
+          numId = batchNumId ?? allocateNumId(usedNumIds);
+          if (batchNumId == null) {
+            usedNumIds.add(numId);
+            startOverride = 1;
+          }
         } else {
-          const isBullet = numId === 1;
-          nextAttrs = {
-            ...node.attrs,
-            numPr: { numId, ilvl: node.attrs.numPr?.ilvl || 0 },
-            listIsBullet: isBullet,
-            listNumFmt: isBullet ? null : 'decimal',
-            listMarker: null,
-          };
+          const continued = continuesPriorList(state.doc, pos, kind);
+          if (continued) {
+            // Extend an existing run (e.g. numbered item 2 → plain line 3).
+            numId = continued.numId;
+          } else {
+            // New list after a break (plain paragraph, table, …). Word models
+            // this as a fresh <w:num> with <w:startOverride w:val="1"/>.
+            numId = allocateNumId(usedNumIds);
+            usedNumIds.add(numId);
+            startOverride = 1;
+          }
         }
-        if (rev) {
-          nextAttrs = appendParagraphPropertyChange(nextAttrs, { numPr: priorNumPr ?? null }, rev);
-        }
-        tr = tr.setNodeMarkup(pos, undefined, nextAttrs);
+
+        batchNumId = numId;
+        nextAttrs = { ...node.attrs, ...listAttrsForSegment(kind, numId, ilvl, startOverride) };
       }
-    });
+
+      if (rev) {
+        nextAttrs = appendParagraphPropertyChange(nextAttrs, { numPr: priorNumPr ?? null }, rev);
+      }
+      tr = tr.setNodeMarkup(pos, undefined, nextAttrs);
+    }
 
     // Authored edit — keep the suggesting-mode catch-all from re-processing it.
     if (rev) tr.setMeta(SUGGESTION_META, true);
@@ -130,11 +244,11 @@ function toggleList(numId: number): Command {
 }
 
 const toggleBulletList: Command = (state, dispatch) => {
-  return toggleList(1)(state, dispatch);
+  return toggleListKind('bullet')(state, dispatch);
 };
 
 const toggleNumberedList: Command = (state, dispatch) => {
-  return toggleList(2)(state, dispatch);
+  return toggleListKind('numbered')(state, dispatch);
 };
 
 const increaseListLevel: Command = (state, dispatch) => {
@@ -185,10 +299,7 @@ const decreaseListLevel: Command = (state, dispatch) => {
       state.tr
         .setNodeMarkup(paragraphPos, undefined, {
           ...paragraph.attrs,
-          numPr: null,
-          listIsBullet: null,
-          listNumFmt: null,
-          listMarker: null,
+          ...clearedListAttrs(),
           indentLeft: null,
           indentFirstLine: null,
           hangingIndent: null,
@@ -223,13 +334,7 @@ const removeList: Command = (state, dispatch) => {
   state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
     if (node.type.name === 'paragraph' && node.attrs.numPr && !seen.has(pos)) {
       seen.add(pos);
-      tr = tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        numPr: null,
-        listIsBullet: null,
-        listNumFmt: null,
-        listMarker: null,
-      });
+      tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...clearedListAttrs() });
     }
   });
 
@@ -282,10 +387,7 @@ function exitListOnEmptyEnter(): Command {
     if (dispatch) {
       const tr = state.tr.setNodeMarkup($from.before(), undefined, {
         ...paragraph.attrs,
-        numPr: null,
-        listIsBullet: null,
-        listNumFmt: null,
-        listMarker: null,
+        ...clearedListAttrs(),
       });
       dispatch(tr);
     }
@@ -332,10 +434,7 @@ function backspaceExitList(): Command {
     if (dispatch) {
       const tr = state.tr.setNodeMarkup($from.before(), undefined, {
         ...paragraph.attrs,
-        numPr: null,
-        listIsBullet: null,
-        listNumFmt: null,
-        listMarker: null,
+        ...clearedListAttrs(),
       });
       dispatch(tr);
     }
@@ -400,10 +499,7 @@ function decreaseListIndent(): Command {
         if (currentLevel <= 0) {
           tr = tr.setNodeMarkup(pos, undefined, {
             ...attrs,
-            numPr: null,
-            listIsBullet: null,
-            listNumFmt: null,
-            listMarker: null,
+            ...clearedListAttrs(),
             indentLeft: null,
             indentFirstLine: null,
             hangingIndent: null,

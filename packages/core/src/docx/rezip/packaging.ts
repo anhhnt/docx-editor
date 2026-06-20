@@ -124,9 +124,9 @@ export async function ensureHeaderFooterParts(
  * empty-template `createDocx()` path). Without it Word can't resolve the
  * `<w:numId>` references and silently drops every list marker.
  *
- * No-op when the package has no numbering definitions, or when it already ships
- * a `numbering.xml` — real-template round-trips keep their original numbering
- * untouched (it is copied through verbatim by the repacker).
+ * No-op when the package has no numbering definitions. When definitions exist,
+ * always emit a fresh `numbering.xml` from the model so PM edits (new numIds,
+ * format changes) are not masked by a stale zip copy from an earlier save.
  */
 export async function ensureNumberingPart(
   doc: Document,
@@ -137,7 +137,6 @@ export async function ensureNumberingPart(
   if (!numbering || (numbering.abstractNums.length === 0 && numbering.nums.length === 0)) {
     return;
   }
-  if (zip.file('word/numbering.xml')) return;
 
   zip.file('word/numbering.xml', serializeNumberingXml(numbering), {
     compression: 'DEFLATE',

@@ -99,7 +99,7 @@ export function collectNumberingFromPM(pmDoc: PMNode): NumberingDefinitions | un
           : nextSyntheticAbstract();
       numIdToAbstract.set(numId, abstractNumId);
     }
-    if (attrs.listStartOverride !== undefined) {
+    if (typeof attrs.listStartOverride === 'number') {
       let levelOverrides = numIdLevelStartOverride.get(numId);
       if (!levelOverrides) {
         levelOverrides = new Map<number, number>();

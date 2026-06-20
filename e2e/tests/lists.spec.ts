@@ -87,6 +87,55 @@ test.describe('Numbered Lists', () => {
     await assertions.assertDocumentContainsText(page, 'First item');
   });
 
+  test('numbered list first marker is 1', async ({ page }) => {
+    await editor.typeText('numbering 1');
+    await editor.toggleNumberedList();
+    await editor.pressEnter();
+    await editor.typeText('numbering 2');
+    await editor.pressEnter();
+    await editor.typeText('numbering 3');
+
+    const markers = await page.locator('.layout-list-marker').allTextContents();
+    expect(markers).toEqual(['1.', '2.', '3.']);
+  });
+
+  test('numbered list restarts at 1 after toggle off and on', async ({ page }) => {
+    await editor.typeText('Item one');
+    await editor.toggleNumberedList();
+    await editor.toggleNumberedList();
+    await editor.toggleNumberedList();
+
+    const markers = await page.locator('.layout-list-marker').allTextContents();
+    expect(markers).toEqual(['1.']);
+  });
+
+  test('second numbered list restarts at 1 after plain paragraph', async ({ page }) => {
+    await editor.typeText('one');
+    await editor.toggleNumberedList();
+    await editor.pressEnter();
+    await editor.typeText('two');
+    await editor.pressEnter();
+    await editor.typeText('three');
+    await editor.pressEnter();
+    await editor.typeText('four');
+    await editor.pressEnter();
+    await editor.pressEnter();
+    await editor.typeText('this is a paragraph');
+    await editor.pressEnter();
+    await editor.pressEnter();
+    await editor.typeText('one');
+    await editor.toggleNumberedList();
+    await editor.pressEnter();
+    await editor.typeText('two');
+    await editor.pressEnter();
+    await editor.typeText('three');
+    await editor.pressEnter();
+    await editor.typeText('four');
+
+    const markers = await page.locator('.layout-list-marker').allTextContents();
+    expect(markers).toEqual(['1.', '2.', '3.', '4.', '1.', '2.', '3.', '4.']);
+  });
+
   test('multiple numbered items', async ({ page }) => {
     await editor.typeText('First');
     await editor.toggleNumberedList();

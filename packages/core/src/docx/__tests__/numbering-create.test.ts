@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { createEmptyDocument } from '../../utils/createDocument';
 import { schema } from '../../prosemirror/schema';
 import { collectNumberingFromPM } from '../../prosemirror/conversion/fromProseDoc/numbering';
+import { fromProseDoc } from '../../prosemirror/conversion/fromProseDoc';
 import { serializeNumberingXml } from '../serializer/numberingSerializer';
 import { parseNumbering } from '../numberingParser';
 import { createDocx } from '../rezip';
@@ -126,6 +127,90 @@ describe('numbering.xml generation on createDocx', () => {
     const defs = collectNumberingFromPM(pmDoc);
     const num = defs!.nums.find((n) => n.numId === 5);
     expect(num?.levelOverrides).toEqual([{ ilvl: 1, startOverride: 3 }]);
+  });
+
+  test('collectNumberingFromPM ignores null listStartOverride on bullet items', () => {
+    const bulleted = schema.nodes.paragraph.create(
+      {
+        numPr: { numId: 2, ilvl: 0 },
+        listIsBullet: true,
+        listStartOverride: null,
+      },
+      schema.text('Bullet item')
+    );
+    const pmDoc = schema.nodes.doc.create(null, bulleted);
+
+    const defs = collectNumberingFromPM(pmDoc);
+    const num = defs!.nums.find((n) => n.numId === 2);
+    expect(num?.levelOverrides).toBeUndefined();
+    expect(serializeNumberingXml(defs!)).not.toContain('<w:startOverride');
+  });
+
+  test('fromProseDoc with base document rebuilds numbering from PM list attrs', () => {
+    const numbered = schema.nodes.paragraph.create(
+      { numPr: { numId: 1, ilvl: 0 }, listNumFmt: 'decimal', listIsBullet: false },
+      schema.text('num1')
+    );
+    const bulleted = schema.nodes.paragraph.create(
+      { numPr: { numId: 2, ilvl: 0 }, listIsBullet: true },
+      schema.text('bullet 1')
+    );
+    const pmDoc = schema.nodes.doc.create(null, [numbered, bulleted]);
+    const base = createEmptyDocument();
+
+    const doc = fromProseDoc(pmDoc, base);
+    expect(doc.package.numbering).toBeDefined();
+    expect(doc.package.numbering!.nums.map((n) => n.numId).sort()).toEqual([1, 2]);
+
+    const decimalAbstract = doc.package.numbering!.abstractNums.find(
+      (a) =>
+        a.abstractNumId === doc.package.numbering!.nums.find((n) => n.numId === 1)!.abstractNumId
+    );
+    expect(decimalAbstract?.levels[0]?.numFmt).toBe('decimal');
+
+    const bulletAbstract = doc.package.numbering!.abstractNums.find(
+      (a) =>
+        a.abstractNumId === doc.package.numbering!.nums.find((n) => n.numId === 2)!.abstractNumId
+    );
+    expect(bulletAbstract?.levels[0]?.numFmt).toBe('bullet');
+  });
+
+  test('editor save path emits decimal + bullet numbering.xml (issue #2 export)', async () => {
+    const numbered = (text: string) =>
+      schema.nodes.paragraph.create(
+        {
+          numPr: { numId: 1, ilvl: 0 },
+          listNumFmt: 'decimal',
+          listIsBullet: false,
+          listStartOverride: 1,
+        },
+        schema.text(text)
+      );
+    const bulleted = (text: string) =>
+      schema.nodes.paragraph.create(
+        { numPr: { numId: 2, ilvl: 0 }, listIsBullet: true, listStartOverride: null },
+        schema.text(text)
+      );
+    const pmDoc = schema.nodes.doc.create(null, [
+      numbered('num1'),
+      numbered('num2'),
+      numbered('num3'),
+      schema.nodes.paragraph.create({}, schema.text('gap')),
+      bulleted('bullet 1'),
+      bulleted('bullet 2'),
+      bulleted('bullet 3'),
+    ]);
+
+    const doc = fromProseDoc(pmDoc, createEmptyDocument());
+    const { numbering } = await unzip(await createDocx(doc));
+    expect(numbering).not.toBeNull();
+
+    const parsed = parseNumbering(numbering!);
+    expect(parsed.getLevel(1, 0)?.numFmt).toBe('decimal');
+    expect(parsed.getLevel(1, 0)?.lvlText).toBe('%1.');
+    expect(parsed.getLevel(2, 0)?.numFmt).toBe('bullet');
+    expect(parsed.getLevel(2, 0)?.lvlText).toBe('•');
+    expect(numbering).not.toMatch(/w:numId="2"[\s\S]*<w:startOverride/);
   });
 
   test('createDocx synthesizes numbering.xml and registers it for documents with lists', async () => {

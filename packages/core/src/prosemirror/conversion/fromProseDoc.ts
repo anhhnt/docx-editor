@@ -53,6 +53,12 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
     comments: baseDocument?.package.document.comments,
   };
 
+  // Rebuild numbering from PM list attrs whenever the document contains lists.
+  // Blank-editor saves and toolbar-created lists carry numPr in the body but
+  // no backing numbering.xml unless we sync this here (Word then maps numIds to
+  // its built-in gallery — Roman numerals, plain decimals, etc.).
+  const pmNumbering = collectNumberingFromPM(pmDoc);
+
   // If we have a base document, preserve its package structure
   const result: Document = baseDocument
     ? {
@@ -60,9 +66,10 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
         package: {
           ...baseDocument.package,
           document: documentBody,
+          numbering: pmNumbering ?? baseDocument.package.numbering,
         },
       }
-    : { package: { document: documentBody, numbering: collectNumberingFromPM(pmDoc) } };
+    : { package: { document: documentBody, numbering: pmNumbering } };
 
   // Sync the watermark doc attr → `HeaderFooter.watermark` so the serializer
   // and any model consumers see watermark applies/removes (incl. via undo).

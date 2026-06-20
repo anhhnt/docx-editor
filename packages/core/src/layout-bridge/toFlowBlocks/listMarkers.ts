@@ -159,9 +159,17 @@ export function computeListMarker(
   const seenKey = `${numId}:${level}`;
   if (!seenNumIds.has(seenKey)) {
     seenNumIds.add(seenKey);
-    if (pmAttrs.listStartOverride != null) {
+    // startOverride comes from parsed numbering.xml (listAbstractNumId set) or
+    // from the toolbar when a new list segment is created (always 1). Stale
+    // orphan overrides (e.g. numId leaking as 2) are ignored.
+    const startOverride =
+      pmAttrs.listStartOverride != null &&
+      (pmAttrs.listAbstractNumId != null || pmAttrs.listStartOverride === 1)
+        ? pmAttrs.listStartOverride
+        : null;
+    if (startOverride != null) {
       // Set to (start - 1) so the increment below produces `start` itself.
-      counters[level] = pmAttrs.listStartOverride - 1;
+      counters[level] = startOverride - 1;
     }
   }
 
